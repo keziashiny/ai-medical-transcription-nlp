@@ -371,11 +371,86 @@ with chat_tab:
 
 st.markdown(
     """
-    <div class="footer">
-        Built by <strong>Kezia Shiny Pothumudi</strong> ·
-        <a href="https://github.com/keziashiny" target="_blank">GitHub</a> ·
-        <a href="https://www.linkedin.com/in/kezia-shiny-pothumudi" target="_blank">LinkedIn</a>
-    </div>
+    <style>
+    /* Make content area a bit narrower and centered */
+    .block-container {
+        max-width: 1200px;
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+    }
+
+    /* Headings */
+    h1, h2, h3 {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0.02em;
+    }
+
+    /* Small pill-style labels */
+    .tag-pill {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-right: 0.25rem;
+        background: rgba(148, 163, 184, 0.15);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    /* Result card */
+    .result-card {
+        padding: 0.75rem 0.5rem 0.25rem 0.5rem;
+    }
+
+    /* Chat bubbles – iMessage-ish */
+    [data-testid="stChatMessage"] {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+    }
+
+    /* Actual bubble for the text portion */
+    [data-testid="stChatMessage"] > div:nth-of-type(2) {
+        background: #111827;                /* dark bubble background */
+        border-radius: 1.1rem;
+        padding: 0.7rem 1rem;
+        margin-top: 0.3rem;
+        max-width: 100%;
+    }
+
+    /* Slightly different background for user vs assistant (best-effort) */
+    [data-testid="stChatMessage"]:nth-of-type(odd) > div:nth-of-type(2) {
+        background: #0b81ff;                /* user-ish bubble (blue) */
+        color: #f9fafb;
+    }
+
+    [data-testid="stChatMessage"]:nth-of-type(even) > div:nth-of-type(2) {
+        background: #111827;                /* assistant bubble (dark) */
+        color: #e5e7eb;
+    }
+
+    /* Footer */
+    .footer {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+        margin-top: 2rem;
+        text-align: right;
+    }
+
+    .footer a {
+        color: #93c5fd;
+        text-decoration: none;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Chat input tweak */
+    .stChatInput textarea {
+        border-radius: 999px !important;
+    }
+    </style>
     """,
     unsafe_allow_html=True,
 )
