@@ -25,7 +25,6 @@ def load_index_and_model():
     nn = saved["nn"]
     model_name = saved["model_name"]
 
-    # Load the CSV that matches the embeddings
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"Data file not found at {DATA_PATH}")
     df = pd.read_csv(DATA_PATH)
@@ -48,7 +47,7 @@ def semantic_search(query: str, top_k: int = 5) -> pd.DataFrame:
     return results
 
 
-# ------------------- PAGE CONFIG & HEADER -------------------
+# ------------------- PAGE CONFIG -------------------
 
 st.set_page_config(
     page_title="Medical NLP Assistant",
@@ -56,15 +55,95 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🩺 Medical NLP Assistant")
+# ------------------- GLOBAL STYLES -------------------
+
 st.markdown(
     """
-Explore a medical transcription dataset using **semantic search** and a **chat-style assistant**.  
-All answers are generated from the dataset and are **for educational/demo purposes only, not medical advice.**
-"""
+    <style>
+    /* Make content area a bit narrower and centered */
+    .block-container {
+        max-width: 1200px;
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+    }
+
+    /* Headings */
+    h1, h2, h3 {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0.02em;
+    }
+
+    /* Small pill-style labels */
+    .tag-pill {
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-right: 0.25rem;
+        background: rgba(148, 163, 184, 0.15);
+        border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    /* Result card */
+    .result-card {
+        padding: 0.75rem 0.5rem 0.25rem 0.5rem;
+    }
+
+    /* Footer */
+    .footer {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        padding-top: 1rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.35);
+        margin-top: 2rem;
+        text-align: right;
+    }
+
+    .footer a {
+        color: #93c5fd;
+        text-decoration: none;
+    }
+    .footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* Chat input tweak */
+    .stChatInput textarea {
+        border-radius: 999px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.divider()
+# ------------------- HEADER -------------------
+
+col_icon, col_title = st.columns([1, 6])
+with col_icon:
+    st.markdown("### 🩺")
+with col_title:
+    st.markdown("## Medical NLP Assistant")
+    st.markdown(
+        """
+        Explore a medical transcription dataset using **semantic search** and a **chat-style assistant**.  
+        All answers are generated from the dataset and are **for educational/demo purposes only, not medical advice.**
+        """
+    )
+
+st.markdown(
+    """
+    <div>
+        <span class="tag-pill">Semantic Search</span>
+        <span class="tag-pill">Clinical Notes</span>
+        <span class="tag-pill">Sentence Transformers</span>
+        <span class="tag-pill">Streamlit</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("---")
 
 # Tabs for modes
 search_tab, chat_tab = st.tabs(["🔍 Search Mode", "💬 Chat Mode"])
@@ -72,40 +151,56 @@ search_tab, chat_tab = st.tabs(["🔍 Search Mode", "💬 Chat Mode"])
 
 # ------------------- 🔍 SEARCH MODE -------------------
 with search_tab:
-    st.subheader("Semantic Search")
+    left_col, right_col = st.columns([1, 2])
 
-    st.write(
-        """
-Type a symptom, diagnosis, or clinical description (e.g.  
-`"fever and chills"`, `"abdominal pain"`, `"shortness of breath"`, `"postoperative chest pain"`).
-        """
-    )
+    with right_col:
+        st.subheader("Semantic Search")
 
-    st.sidebar.header("Search Settings")
-    top_k_search = st.sidebar.slider(
-        "Number of results (search mode)", min_value=3, max_value=15, value=5, step=1
-    )
+        st.write(
+            """
+Type a symptom, diagnosis, or clinical description, for example:  
+`"fever and chills"`, `"abdominal pain"`, `"shortness of breath"`, `"postoperative chest pain"`.
+            """
+        )
 
-    example_queries = [
-        "fever and chills",
-        "abdominal pain",
-        "shortness of breath",
-        "diabetes follow up",
-        "postoperative chest pain",
-    ]
+        example_queries = [
+            "fever and chills",
+            "abdominal pain",
+            "shortness of breath",
+            "diabetes follow up",
+            "postoperative chest pain",
+        ]
 
-    st.sidebar.markdown("### Example queries")
-    example_search = st.sidebar.selectbox(
-        "Try an example:", ["(none)"] + example_queries, key="search_example"
-    )
+        query_search = st.text_input(
+            "Enter a query:",
+            placeholder="e.g. abdominal pain after surgery",
+            key="search_input",
+        )
 
-    query_search = st.text_input(
-        "Enter a query:",
-        value=example_search if example_search != "(none)" else "",
-        key="search_input",
-    )
+        col_btn1, col_btn2 = st.columns([1, 3])
+        with col_btn1:
+            run_search = st.button("Run Search", type="primary")
+        with col_btn2:
+            example = st.selectbox(
+                "Or pick an example:",
+                ["(none)"] + example_queries,
+                index=0,
+                key="search_example",
+            )
+            if example != "(none)" and not query_search:
+                query_search = example
+                st.session_state["search_input"] = example
 
-    if st.button("Run Search"):
+    with left_col:
+        st.sidebar.header("Search Settings")
+        top_k_search = st.sidebar.slider(
+            "Number of results (search mode)", min_value=3, max_value=15, value=5, step=1
+        )
+
+        st.sidebar.markdown("### Example queries")
+        st.sidebar.write("Use the dropdown in the main area to quickly try one.")
+
+    if run_search:
         if not query_search.strip():
             st.warning("Please enter a query first.")
         else:
@@ -128,23 +223,31 @@ Type a symptom, diagnosis, or clinical description (e.g.
                 if selected_specialty != "All":
                     results = results[results["medical_specialty"] == selected_specialty]
 
-            for idx, row in results.iterrows():
-                header = row.get("sample_name", f"Sample {idx}")
-                with st.expander(f"📄 {header}  |  distance: {row['distance']:.3f}"):
+            if results.empty:
+                st.info("No matching cases were found for that query.")
+            else:
+                for idx, row in results.iterrows():
+                    header = row.get("sample_name", f"Sample {idx}")
+                    distance = row.get("distance", 0.0)
 
-                    if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
-                        st.markdown(f"**Specialty:** {row['medical_specialty']}")
+                    with st.expander(f"📄 {header}  ·  similarity score: {1 - distance:.3f}"):
+                        st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-                    if "description" in row and isinstance(row["description"], str):
-                        st.markdown(f"**Description:** {row['description']}")
+                        if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
+                            st.markdown(f"**Specialty:** {row['medical_specialty']}")
 
-                    if "transcription" in row and isinstance(row["transcription"], str):
-                        st.markdown("#### Original Transcription")
-                        st.write(row["transcription"])
+                        if "description" in row and isinstance(row["description"], str):
+                            st.markdown(f"**Description:** {row['description']}")
 
-                    if "clean_text" in row and isinstance(row["clean_text"], str):
-                        st.markdown("#### Cleaned Text (Model Input)")
-                        st.write(row["clean_text"])
+                        if "transcription" in row and isinstance(row["transcription"], str):
+                            st.markdown("#### Original Transcription")
+                            st.write(row["transcription"])
+
+                        if "clean_text" in row and isinstance(row["clean_text"], str):
+                            st.markdown("#### Cleaned Text (Model Input)")
+                            st.write(row["clean_text"])
+
+                        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ------------------- 💬 CHAT MODE -------------------
@@ -158,6 +261,7 @@ with chat_tab:
         "`What symptoms are associated with shortness of breath?`"
     )
 
+    # Sidebar info
     st.sidebar.markdown("---")
     st.sidebar.header("Chat Mode Info")
     st.sidebar.info(
@@ -183,10 +287,10 @@ with chat_tab:
         with st.chat_message("user"):
             st.markdown(user_query)
 
-        # --- simple greeting handling ---
         normalized = user_query.lower().strip()
         greeting_keywords = ["hi", "hello", "hey"]
 
+        # ---- Greeting branch ----
         if normalized in greeting_keywords:
             assistant_reply = (
                 "Hi! 👋 It's really nice to meet you.\n\n"
@@ -200,8 +304,8 @@ with chat_tab:
 
             st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
 
+        # ---- Semantic search answer branch ----
         else:
-            # Assistant reply based on semantic search
             with st.chat_message("assistant"):
                 with st.spinner("Looking for similar cases in the dataset..."):
                     results = semantic_search(user_query, top_k=5)
@@ -256,10 +360,22 @@ with chat_tab:
 
                     st.markdown(assistant_reply)
 
-            # Save assistant reply in history
             st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
 
-    # Clear chat
+    # Clear chat button
     if st.button("Clear chat history"):
         st.session_state.messages = []
         st.experimental_rerun()
+
+# ------------------- FOOTER -------------------
+
+st.markdown(
+    """
+    <div class="footer">
+        Built by <strong>Kezia Shiny Pothumudi</strong> ·
+        <a href="https://github.com/keziashiny" target="_blank">GitHub</a> ·
+        <a href="https://www.linkedin.com/in/kezia-shiny-pothumudi" target="_blank">LinkedIn</a>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
