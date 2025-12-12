@@ -13,7 +13,6 @@ EMB_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings.npy"
 DATA_PATH = BASE_DIR / "outputs" / "processed" / "processed_results.csv"
 
 
-
 @st.cache_resource
 def load_index_and_model():
     """
@@ -36,7 +35,7 @@ def load_index_and_model():
     df = pd.read_csv(DATA_PATH)
     embeddings = np.load(EMB_PATH)
 
-    # ✅ handle mismatch safely (don’t crash)
+    # Handle mismatch safely (don’t crash)
     if len(df) != embeddings.shape[0]:
         st.warning(
             f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows. "
@@ -46,18 +45,7 @@ def load_index_and_model():
 
     model = SentenceTransformer(model_name)
 
-    # ✅ ALWAYS return (no matter what)
     return nn, model, embeddings, df, model_name
-
-
-    # sanity check
-    if len(df) != embeddings.shape[0]:
-       st.warning(
-        f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows. "
-        "Auto-trimming df to match embeddings."
-    )
-    df = df.iloc[:embeddings.shape[0]].reset_index(drop=True)
-
 
 
 def semantic_search(query: str, nn, model, df: pd.DataFrame, top_k: int = 5) -> pd.DataFrame:
@@ -90,20 +78,17 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Make content area a bit narrower and centered */
     .block-container {
         max-width: 1200px;
         padding-top: 2rem;
         padding-bottom: 4rem;
     }
 
-    /* Headings */
     h1, h2, h3 {
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         letter-spacing: 0.02em;
     }
 
-    /* Small pill-style labels */
     .tag-pill {
         display: inline-block;
         padding: 0.15rem 0.55rem;
@@ -115,12 +100,10 @@ st.markdown(
         border: 1px solid rgba(148, 163, 184, 0.35);
     }
 
-    /* Result card */
     .result-card {
         padding: 0.75rem 0.5rem 0.25rem 0.5rem;
     }
 
-    /* Footer */
     .footer {
         font-size: 0.8rem;
         color: #9ca3af;
@@ -259,31 +242,28 @@ Type a symptom, diagnosis, or clinical description, for example:
                 st.info("No matching cases were found for that query.")
             else:
                 for idx, row in results.reset_index(drop=True).iterrows():
-                 header = row.get("sample_name", f"Sample {idx+1}")
-                 sim = float(row.get("similarity", 0.0))
+                    header = row.get("sample_name", f"Sample {idx+1}")
+                    sim = float(row.get("similarity", 0.0))
 
-                 with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
-                  st.markdown('<div class="result-card">', unsafe_allow_html=True)
+                    with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
+                        st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-                  if "transcription" in row and isinstance(row["transcription"], str):
-                   st.markdown("#### Original Transcription")
-                   st.write(row["transcription"])
+                        if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
+                            st.markdown(f"**Specialty:** {row['medical_specialty']}")
 
-        # ✅ cleaned text must be INSIDE the loop, inside the expander
-                  with st.expander("Show model input (cleaned text)"):
-                   if "clean_text" in row and isinstance(row["clean_text"], str):
-                    st.write(row["clean_text"])
+                        if "description" in row and isinstance(row["description"], str):
+                            st.markdown(f"**Description:** {row['description']}")
 
-                  st.markdown("</div>", unsafe_allow_html=True)
+                        if "transcription" in row and isinstance(row["transcription"], str):
+                            st.markdown("#### Original Transcription")
+                            st.write(row["transcription"])
 
+                        # Cleaned text hidden by default (debug only)
+                        with st.expander("Show model input (cleaned text)"):
+                            if "clean_text" in row and isinstance(row["clean_text"], str):
+                                st.write(row["clean_text"])
 
-    # 👇 cleaned text hidden by default
-    with st.expander("Show model input (cleaned text)"):
-        if "clean_text" in row and isinstance(row["clean_text"], str):
-            st.write(row["clean_text"])
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
+                        st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ------------------- 💬 CHAT MODE -------------------
@@ -297,7 +277,6 @@ with chat_tab:
         "`What symptoms are associated with shortness of breath?`"
     )
 
-    # Sidebar info
     st.sidebar.markdown("---")
     st.sidebar.header("Chat Mode Info")
     st.sidebar.info(
@@ -306,19 +285,15 @@ with chat_tab:
         "This is for learning and demo purposes only and is **not medical advice**."
     )
 
-    # Chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Show previous messages
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # User input
     user_query = st.chat_input("Ask something about the cases in this dataset...")
     if user_query:
-        # Save user message
         st.session_state.messages.append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
@@ -326,7 +301,6 @@ with chat_tab:
         normalized = user_query.lower().strip()
         greeting_keywords = {"hi", "hello", "hey"}
 
-        # ---- Greeting branch ----
         if normalized in greeting_keywords:
             assistant_reply = (
                 "Hi! 👋\n\n"
@@ -338,10 +312,7 @@ with chat_tab:
             )
             with st.chat_message("assistant"):
                 st.markdown(assistant_reply)
-
             st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
-
-        # ---- Semantic search answer branch ----
         else:
             with st.chat_message("assistant"):
                 with st.spinner("Looking for similar cases in the dataset..."):
@@ -365,19 +336,20 @@ with chat_tab:
                             sim = float(row.get("similarity", 0.0))
 
                             description = row.get("description", "")
-                            desc_text = description.strip() if isinstance(description, str) and description.strip() else \
-                                "No short description was provided in this note."
+                            desc_text = (
+                                description.strip()
+                                if isinstance(description, str) and description.strip()
+                                else "No short description was provided in this note."
+                            )
 
                             snippet = ""
-                            # Prefer transcription for snippet if available
                             if isinstance(row.get("transcription"), str) and row["transcription"].strip():
                                 snippet = row["transcription"].strip().replace("\n", " ")
                             elif isinstance(row.get("clean_text"), str) and row["clean_text"].strip():
                                 snippet = row["clean_text"].strip().replace("\n", " ")
 
-                            if snippet:
-                                if len(snippet) > 260:
-                                    snippet = snippet[:260].rsplit(" ", 1)[0] + "..."
+                            if snippet and len(snippet) > 260:
+                                snippet = snippet[:260].rsplit(" ", 1)[0] + "..."
 
                             block = (
                                 f"### 🩺 Case {i+1}: {sample_name}\n"
@@ -401,7 +373,6 @@ with chat_tab:
 
             st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
 
-    # Clear chat button
     if st.button("Clear chat history"):
         st.session_state.messages = []
         st.rerun()
