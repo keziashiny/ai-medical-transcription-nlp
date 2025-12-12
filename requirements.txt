@@ -1,10 +1,8 @@
 streamlit
 pandas
 numpy
-sentence-transformers
 scikit-learn
-pyarrow
-<<<<<<< Updated upstream
-=======
+sentence-transformers
 
->>>>>>> Stashed changes
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
