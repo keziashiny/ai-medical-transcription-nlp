@@ -259,22 +259,23 @@ Type a symptom, diagnosis, or clinical description, for example:
                 st.info("No matching cases were found for that query.")
             else:
                 for idx, row in results.reset_index(drop=True).iterrows():
-                    header = row.get("sample_name", f"Sample {idx+1}")
-                    distance = float(row.get("distance", 0.0))
-                    sim = float(row.get("similarity", 0.0))
+                 header = row.get("sample_name", f"Sample {idx+1}")
+                 sim = float(row.get("similarity", 0.0))
 
-                    with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
-                     st.markdown('<div class="result-card">', unsafe_allow_html=True)
+                 with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
+                  st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-                    if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
-                     st.markdown(f"**Specialty:** {row['medical_specialty']}")
+                  if "transcription" in row and isinstance(row["transcription"], str):
+                   st.markdown("#### Original Transcription")
+                   st.write(row["transcription"])
 
-                    if "description" in row and isinstance(row["description"], str):
-                      st.markdown(f"**Description:** {row['description']}")
+        # ✅ cleaned text must be INSIDE the loop, inside the expander
+                  with st.expander("Show model input (cleaned text)"):
+                   if "clean_text" in row and isinstance(row["clean_text"], str):
+                    st.write(row["clean_text"])
 
-                    if "transcription" in row and isinstance(row["transcription"], str):
-                      st.markdown("#### Original Transcription")
-                      st.write(row["transcription"])
+                  st.markdown("</div>", unsafe_allow_html=True)
+
 
     # 👇 cleaned text hidden by default
     with st.expander("Show model input (cleaned text)"):
