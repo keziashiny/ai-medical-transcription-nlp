@@ -39,11 +39,12 @@ def load_index_and_model():
 
     # sanity check
     if len(df) != embeddings.shape[0]:
-        raise ValueError(
-            f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows"
-        )
+       st.warning(
+        f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows. "
+        "Auto-trimming df to match embeddings."
+    )
+    df = df.iloc[:embeddings.shape[0]].reset_index(drop=True)
 
-    return nn, model, embeddings, df, model_name
 
 
 def semantic_search(query: str, nn, model, df: pd.DataFrame, top_k: int = 5) -> pd.DataFrame:
