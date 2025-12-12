@@ -14,6 +14,12 @@ A Streamlit web app that lets you explore a medical transcription dataset using 
 2. A NearestNeighbors index retrieves top-k similar notes for a query.
 3. The UI displays the matched notes and a friendly summary.
 
+## Project Highlights
+- End-to-end NLP app: preprocessing → embeddings → vector search → UI
+- Semantic search over 4,999 clinical notes
+- Clean UX with expandable technical details
+- Deployed on Streamlit Cloud
+
 ## Tech stack
 - Python, Streamlit
 - sentence-transformers
