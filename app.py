@@ -34,8 +34,21 @@ def load_index_and_model():
     model_name = saved["model_name"]
 
     df = pd.read_csv(DATA_PATH)
-    model = SentenceTransformer(model_name)
     embeddings = np.load(EMB_PATH)
+
+    # ✅ handle mismatch safely (don’t crash)
+    if len(df) != embeddings.shape[0]:
+        st.warning(
+            f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows. "
+            "Auto-trimming df to match embeddings."
+        )
+        df = df.iloc[: embeddings.shape[0]].reset_index(drop=True)
+
+    model = SentenceTransformer(model_name)
+
+    # ✅ ALWAYS return (no matter what)
+    return nn, model, embeddings, df, model_name
+
 
     # sanity check
     if len(df) != embeddings.shape[0]:
