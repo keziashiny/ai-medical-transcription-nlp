@@ -10,7 +10,8 @@ import streamlit as st
 BASE_DIR = Path(__file__).parent
 INDEX_PATH = BASE_DIR / "outputs" / "embeddings" / "nn_index.pkl"
 EMB_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings.npy"
-DATA_PATH = BASE_DIR / "outputs" / "processed" / "processed_results_clean.csv"
+DATA_PATH = BASE_DIR / "outputs" / "processed" / "processed_results.csv"
+
 
 
 @st.cache_resource
