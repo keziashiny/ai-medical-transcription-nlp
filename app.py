@@ -251,15 +251,15 @@ Type a symptom, diagnosis, or clinical description, for example:
                     with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
                      st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-    if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
-        st.markdown(f"**Specialty:** {row['medical_specialty']}")
+                    if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
+                     st.markdown(f"**Specialty:** {row['medical_specialty']}")
 
-    if "description" in row and isinstance(row["description"], str):
-        st.markdown(f"**Description:** {row['description']}")
+                    if "description" in row and isinstance(row["description"], str):
+                      st.markdown(f"**Description:** {row['description']}")
 
-    if "transcription" in row and isinstance(row["transcription"], str):
-        st.markdown("#### Original Transcription")
-        st.write(row["transcription"])
+                    if "transcription" in row and isinstance(row["transcription"], str):
+                      st.markdown("#### Original Transcription")
+                      st.write(row["transcription"])
 
     # 👇 cleaned text hidden by default
     with st.expander("Show model input (cleaned text)"):

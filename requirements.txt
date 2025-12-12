@@ -4,3 +4,7 @@ numpy
 sentence-transformers
 scikit-learn
 pyarrow
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
