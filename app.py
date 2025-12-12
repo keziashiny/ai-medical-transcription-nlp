@@ -10,7 +10,7 @@ import streamlit as st
 BASE_DIR = Path(__file__).parent
 INDEX_PATH = BASE_DIR / "outputs" / "embeddings" / "nn_index.pkl"
 EMB_PATH = BASE_DIR / "outputs" / "embeddings" / "embeddings.npy"
-DATA_PATH = BASE_DIR / "outputs" / "processed" / "processed_results.csv"
+DATA_PATH = BASE_DIR / "outputs" / "processed" / "processed_results_clean.csv"
 
 
 @st.cache_resource
@@ -19,44 +19,59 @@ def load_index_and_model():
     Load nearest neighbors index, sentence-transformer model, embeddings, and dataframe.
     Uses relative paths so it works both locally and on Streamlit Cloud.
     """
+    if not INDEX_PATH.exists():
+        raise FileNotFoundError(f"Index file not found at {INDEX_PATH}")
+    if not EMB_PATH.exists():
+        raise FileNotFoundError(f"Embeddings file not found at {EMB_PATH}")
+    if not DATA_PATH.exists():
+        raise FileNotFoundError(f"Data file not found at {DATA_PATH}")
+
     with open(INDEX_PATH, "rb") as f:
         saved = pickle.load(f)
 
     nn = saved["nn"]
     model_name = saved["model_name"]
 
-    if not DATA_PATH.exists():
-        raise FileNotFoundError(f"Data file not found at {DATA_PATH}")
     df = pd.read_csv(DATA_PATH)
-
     model = SentenceTransformer(model_name)
     embeddings = np.load(EMB_PATH)
 
-    return df, model, nn, embeddings
+    # sanity check
+    if len(df) != embeddings.shape[0]:
+        raise ValueError(
+            f"Row mismatch: df has {len(df)} rows but embeddings has {embeddings.shape[0]} rows"
+        )
+
+    return nn, model, embeddings, df, model_name
 
 
-def semantic_search(query: str, top_k: int = 5) -> pd.DataFrame:
-    """Run semantic search over the dataset and return top_k rows."""
-    df, model, nn, embeddings = load_index_and_model()
+def semantic_search(query: str, nn, model, df: pd.DataFrame, top_k: int = 5) -> pd.DataFrame:
+    """
+    NearestNeighbors-based semantic search.
+    If nn was built with cosine distance:
+      similarity ≈ 1 - distance
+    """
+    q_emb = model.encode([query], normalize_embeddings=True)
+    distances, indices = nn.kneighbors(q_emb, n_neighbors=top_k)
 
-    query_emb = model.encode([query])
-    distances, indices = nn.kneighbors(query_emb, n_neighbors=top_k)
+    distances = distances[0]
+    indices = indices[0]
 
-    results = df.iloc[indices[0]].copy()
-    results["distance"] = distances[0]
+    results = df.iloc[indices].copy()
+    results["distance"] = distances
+    results["similarity"] = 1.0 - results["distance"]
+    results = results.sort_values("similarity", ascending=False).reset_index(drop=True)
     return results
 
 
 # ------------------- PAGE CONFIG -------------------
-
 st.set_page_config(
     page_title="Medical NLP Assistant",
     page_icon="🩺",
     layout="wide",
 )
 
-# ------------------- GLOBAL STYLES -------------------
-
+# ------------------- GLOBAL STYLES (NO CHAT BUBBLES) -------------------
 st.markdown(
     """
     <style>
@@ -107,18 +122,12 @@ st.markdown(
     .footer a:hover {
         text-decoration: underline;
     }
-
-    /* Chat input tweak */
-    .stChatInput textarea {
-        border-radius: 999px !important;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ------------------- HEADER -------------------
-
 col_icon, col_title = st.columns([1, 6])
 with col_icon:
     st.markdown("### 🩺")
@@ -144,6 +153,14 @@ st.markdown(
 )
 
 st.markdown("---")
+
+# ------------------- LOAD RESOURCES -------------------
+try:
+    nn, model, embeddings, df, model_name = load_index_and_model()
+except Exception as e:
+    st.error("Failed to load app resources.")
+    st.exception(e)
+    st.stop()
 
 # Tabs for modes
 search_tab, chat_tab = st.tabs(["🔍 Search Mode", "💬 Chat Mode"])
@@ -205,14 +222,14 @@ Type a symptom, diagnosis, or clinical description, for example:
             st.warning("Please enter a query first.")
         else:
             with st.spinner("Running semantic search..."):
-                results = semantic_search(query_search, top_k=top_k_search)
+                results = semantic_search(query_search, nn, model, df, top_k=top_k_search)
 
             st.markdown(f"### 🔍 Top {len(results)} results for: `{query_search}`")
 
             # Optional specialty filter
             if "medical_specialty" in results.columns:
                 specialties = ["All"] + sorted(
-                    results["medical_specialty"].dropna().unique().tolist()
+                    results["medical_specialty"].dropna().astype(str).unique().tolist()
                 )
                 selected_specialty = st.selectbox(
                     "Filter by medical specialty (optional):",
@@ -221,33 +238,36 @@ Type a symptom, diagnosis, or clinical description, for example:
                 )
 
                 if selected_specialty != "All":
-                    results = results[results["medical_specialty"] == selected_specialty]
+                    results = results[results["medical_specialty"].astype(str) == str(selected_specialty)]
 
             if results.empty:
                 st.info("No matching cases were found for that query.")
             else:
-                for idx, row in results.iterrows():
-                    header = row.get("sample_name", f"Sample {idx}")
-                    distance = row.get("distance", 0.0)
+                for idx, row in results.reset_index(drop=True).iterrows():
+                    header = row.get("sample_name", f"Sample {idx+1}")
+                    distance = float(row.get("distance", 0.0))
+                    sim = float(row.get("similarity", 0.0))
 
-                    with st.expander(f"📄 {header}  ·  similarity score: {1 - distance:.3f}"):
-                        st.markdown('<div class="result-card">', unsafe_allow_html=True)
+                    with st.expander(f"📄 {header}  ·  similarity score: {sim:.3f}", expanded=(idx < 3)):
+                     st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-                        if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
-                            st.markdown(f"**Specialty:** {row['medical_specialty']}")
+    if "medical_specialty" in row and not pd.isna(row["medical_specialty"]):
+        st.markdown(f"**Specialty:** {row['medical_specialty']}")
 
-                        if "description" in row and isinstance(row["description"], str):
-                            st.markdown(f"**Description:** {row['description']}")
+    if "description" in row and isinstance(row["description"], str):
+        st.markdown(f"**Description:** {row['description']}")
 
-                        if "transcription" in row and isinstance(row["transcription"], str):
-                            st.markdown("#### Original Transcription")
-                            st.write(row["transcription"])
+    if "transcription" in row and isinstance(row["transcription"], str):
+        st.markdown("#### Original Transcription")
+        st.write(row["transcription"])
 
-                        if "clean_text" in row and isinstance(row["clean_text"], str):
-                            st.markdown("#### Cleaned Text (Model Input)")
-                            st.write(row["clean_text"])
+    # 👇 cleaned text hidden by default
+    with st.expander("Show model input (cleaned text)"):
+        if "clean_text" in row and isinstance(row["clean_text"], str):
+            st.write(row["clean_text"])
 
-                        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
 
 # ------------------- 💬 CHAT MODE -------------------
@@ -288,16 +308,17 @@ with chat_tab:
             st.markdown(user_query)
 
         normalized = user_query.lower().strip()
-        greeting_keywords = ["hi", "hello", "hey"]
+        greeting_keywords = {"hi", "hello", "hey"}
 
         # ---- Greeting branch ----
         if normalized in greeting_keywords:
             assistant_reply = (
-                "Hi! 👋 It's really nice to meet you.\n\n"
+                "Hi! 👋\n\n"
                 "I'm your medical NLP assistant. You can ask things like:\n\n"
                 "- `What are common causes of fever?`\n"
                 "- `How is abdominal pain described?`\n"
-                "- `What symptoms are associated with chest pain?`"
+                "- `What symptoms are associated with chest pain?`\n\n"
+                "**Reminder:** this is for educational/demo purposes only — not medical advice."
             )
             with st.chat_message("assistant"):
                 st.markdown(assistant_reply)
@@ -308,52 +329,54 @@ with chat_tab:
         else:
             with st.chat_message("assistant"):
                 with st.spinner("Looking for similar cases in the dataset..."):
-                    results = semantic_search(user_query, top_k=5)
+                    results = semantic_search(user_query, nn, model, df, top_k=5)
 
                     if results.empty:
                         assistant_reply = (
                             "I couldn't find any clear matches for that question in this dataset. "
-                            "You might try rephrasing it or asking about a specific symptom or condition."
+                            "Try rephrasing it, or asking about a specific symptom/condition."
                         )
                     else:
                         intro = (
-                            f"Here's what I was able to understand from similar cases in this dataset about "
-                            f"**{user_query}**. I’ll give you a warm, easy-to-follow summary of what clinicians "
-                            "noted in these situations.\n\n"
-                            "**Just a reminder:** this is only for learning and exploration, not medical advice.\n\n"
+                            f"Here’s what I found in similar notes about **{user_query}**.\n\n"
+                            "**Reminder:** this is only for learning/demo — not medical advice.\n\n"
                         )
 
                         case_summaries = []
-                        for i, (_, row) in enumerate(results.iterrows(), start=1):
-                            sample_name = row.get("sample_name", f"Case {i}")
+                        for i, row in results.iterrows():
+                            sample_name = row.get("sample_name", f"Case {i+1}")
                             specialty = row.get("medical_specialty", "Unknown specialty")
+                            sim = float(row.get("similarity", 0.0))
 
                             description = row.get("description", "")
-                            if isinstance(description, str) and description.strip():
-                                desc_text = description.strip()
-                            else:
-                                desc_text = "No short description was provided in this note."
+                            desc_text = description.strip() if isinstance(description, str) and description.strip() else \
+                                "No short description was provided in this note."
 
                             snippet = ""
-                            if isinstance(row.get("clean_text"), str):
+                            # Prefer transcription for snippet if available
+                            if isinstance(row.get("transcription"), str) and row["transcription"].strip():
+                                snippet = row["transcription"].strip().replace("\n", " ")
+                            elif isinstance(row.get("clean_text"), str) and row["clean_text"].strip():
                                 snippet = row["clean_text"].strip().replace("\n", " ")
+
+                            if snippet:
                                 if len(snippet) > 260:
                                     snippet = snippet[:260].rsplit(" ", 1)[0] + "..."
 
                             block = (
-                                f"### 🩺 Case {i}: {sample_name}\n"
+                                f"### 🩺 Case {i+1}: {sample_name}\n"
                                 f"- **Specialty:** {specialty}\n"
+                                f"- **Similarity:** {sim:.3f}\n"
                                 f"- **What this note focuses on:** {desc_text}\n"
                             )
                             if snippet:
-                                block += f"- **How the clinician described it:** “{snippet}”\n"
+                                block += f"- **Snippet:** “{snippet}”\n"
 
                             case_summaries.append(block)
 
                         outro = (
-                            "\nI hope this gives you a clearer, more human understanding of how similar cases "
-                            "were described. If you're ever unsure or dealing with real symptoms, it's always "
-                            "best to talk with a licensed healthcare professional."
+                            "\nIf you want, tell me what kind of output you prefer next time: "
+                            "**short bullets**, **a structured summary**, or **only the top 1–2 cases**."
                         )
 
                         assistant_reply = intro + "\n\n".join(case_summaries) + "\n\n" + outro
@@ -365,92 +388,15 @@ with chat_tab:
     # Clear chat button
     if st.button("Clear chat history"):
         st.session_state.messages = []
-        st.experimental_rerun()
+        st.rerun()
+
 
 # ------------------- FOOTER -------------------
-
 st.markdown(
     """
-    <style>
-    /* Make content area a bit narrower and centered */
-    .block-container {
-        max-width: 1200px;
-        padding-top: 2rem;
-        padding-bottom: 4rem;
-    }
-
-    /* Headings */
-    h1, h2, h3 {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        letter-spacing: 0.02em;
-    }
-
-    /* Small pill-style labels */
-    .tag-pill {
-        display: inline-block;
-        padding: 0.15rem 0.55rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-right: 0.25rem;
-        background: rgba(148, 163, 184, 0.15);
-        border: 1px solid rgba(148, 163, 184, 0.35);
-    }
-
-    /* Result card */
-    .result-card {
-        padding: 0.75rem 0.5rem 0.25rem 0.5rem;
-    }
-
-    /* Chat bubbles – iMessage-ish */
-    [data-testid="stChatMessage"] {
-        padding-top: 0.25rem;
-        padding-bottom: 0.25rem;
-    }
-
-    /* Actual bubble for the text portion */
-    [data-testid="stChatMessage"] > div:nth-of-type(2) {
-        background: #111827;                /* dark bubble background */
-        border-radius: 1.1rem;
-        padding: 0.7rem 1rem;
-        margin-top: 0.3rem;
-        max-width: 100%;
-    }
-
-    /* Slightly different background for user vs assistant (best-effort) */
-    [data-testid="stChatMessage"]:nth-of-type(odd) > div:nth-of-type(2) {
-        background: #0b81ff;                /* user-ish bubble (blue) */
-        color: #f9fafb;
-    }
-
-    [data-testid="stChatMessage"]:nth-of-type(even) > div:nth-of-type(2) {
-        background: #111827;                /* assistant bubble (dark) */
-        color: #e5e7eb;
-    }
-
-    /* Footer */
-    .footer {
-        font-size: 0.8rem;
-        color: #9ca3af;
-        padding-top: 1rem;
-        border-top: 1px solid rgba(148, 163, 184, 0.35);
-        margin-top: 2rem;
-        text-align: right;
-    }
-
-    .footer a {
-        color: #93c5fd;
-        text-decoration: none;
-    }
-    .footer a:hover {
-        text-decoration: underline;
-    }
-
-    /* Chat input tweak */
-    .stChatInput textarea {
-        border-radius: 999px !important;
-    }
-    </style>
+    <div class="footer">
+        Built with Streamlit • Educational/Demo only
+    </div>
     """,
     unsafe_allow_html=True,
 )
